@@ -2,7 +2,7 @@
 
 A semantic segmentation model for detecting data centers in aerial imagery using [Clay AI](https://madewithclay.org/) ? ...well, not actually.
 
-![va_cluster](./va_cluster.png)
+![polys](./polys.png)
 ![clay](./clay.png)
 
 ## Summary (a salvage operation)
@@ -12,6 +12,8 @@ Clay AI is made for "earth observation" and, their [website](https://madewithcla
 This is essentially a segmentation problem, where we need to differentiate "data centers" from other structures in an image. Ideally, I'd get a polygon + Lat/Lon centroid too.
 
 ### **Unfortunately, Clay didn't work for this data center segmentation experiment**
+
+***If someone out there has any tips for how to make Clay AI work for this task, please let me know 🙃***
 
 The Clay [model](https://github.com/Clay-foundation/model) includes a segmentation example using Chesapeake Bay wetlands, which works because Clay's encoder was trained with 311M params of earth-centric features (vegetation, water bodies, agricultural patterns, etc.). It was able to do segmentation on land types, because it "knows" about the feature boundaries. 
 
