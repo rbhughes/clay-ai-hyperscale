@@ -29,7 +29,6 @@ The results using Clay were bad:
 - Best attempt: 37% IoU with balanced weights
 - Worst attempt: 0.5% recall with Focal Loss (predicted almost nothing)
 
-The NAIP chips that I used to digitize datacenters.geojson are not included in this repo (163M). Reach out if you would like them.
 
 ***see the "Gory Details" section for full details***
 
@@ -341,3 +340,10 @@ The [Clay segmentation documentation](https://github.com/Clay-foundation/model/b
 - Very slow training on available hardware (CPU/MPS)
 - High risk of overfitting with only 757 training chips
 - Even if it worked, would negate the benefit of using a pre-trained model
+
+
+---
+### BONUS: check out this crazy cluster of (mostly) data centers in VA:
+![va_cluster](./va_cluster.png)
+
+***The NAIP chips that I used to digitize datacenters.geojson were too big to include in this repo (163M); reach out if you would like them. See data/datacenters.geojson for more details.***
