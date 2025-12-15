@@ -1,91 +1,74 @@
-# Datacenter Detector
+# Data Center Detector?
 
-Semantic segmentation model for detecting datacenters in aerial imagery using U-Net architecture.
+A semantic segmentation model for detecting data centers in aerial imagery using [Clay AI](https://madewithclay.org/) ? ...well, not actually.
 
-## Features
+![va_cluster](./va_cluster.png)
+![clay](./clay.png)
 
-- **U-Net segmentation** trained from scratch on NAIP imagery
-- **76.3% Dice Score** (61.7% IoU) on test data
-- **Multi-tile inference** with automatic stitching for arbitrary image sizes
-- **Polygon merging** to handle fragmented predictions
-- **Edge filtering** to remove false positives from image boundaries
-- **NAIP download** with automatic tile mosaicking
-- **GeoJSON output** with datacenter centroids and areas
+## Summary (a salvage operation)
 
-## Model Evolution
+Clay AI is made for "earth observation" and, their [website](https://madewithclay.org/) shows a few examples with man-made structures (livestock), so I wondered if I could train it to detect hyperscale data centers.
+
+This is essentially a segmentation problem, where we need to differentiate "data centers" from other structures in an image. Ideally, I'd get a polygon + Lat/Lon centroid too.
+
+### **Unfortunately, Clay didn't work for this data center segmentation experiment**
+
+The Clay [model](https://github.com/Clay-foundation/model) includes a segmentation example using Chesapeake Bay wetlands, which works because Clay's encoder was trained with 311M params of earth-centric features (vegetation, water bodies, agricultural patterns, etc.). It was able to do segmentation on land types, because it "knows" about the feature boundaries. 
+
+However, the model fails on segmentation of data centers because the features are not among its parameters:
+- Rectangular industrial buildings with distinctive rooftops
+- Cooling infrastructure patterns (chillers, cooling towers)
+- Electrical substation arrangements
+- Uniform spacing and geometric layouts
+
+>  **Fine-tuning using some data center polygons against the frozen encoder was simply not a good match for the model to learn to recognize "alien" data center features.**
+
+The results using Clay were bad:
+- Best attempt: 37% IoU with balanced weights
+- Worst attempt: 0.5% recall with Focal Loss (predicted almost nothing)
+
+The NAIP chips that I used to digitize datacenters.geojson are not included in this repo (163M). Reach out if you would like them.
+
+***see the "Gory Details" section for full details***
+
+### Classification worked but that wasn't my objective
+
+An early iteration used a chip-level classifier that predicted whether a 256×256 pixel image chip contained a data center. While this worked for binary classification, it had critical limitations:
+
+- **No precise localization**: Could only say "data center exists in this 256×256 area" but not where exactly
+- **Poor centroid accuracy**: Center of the chip is not the same as center of the data center
+- **No polygon extraction**: Couldn't determine data center boundaries or actual footprint
+- **Coarse granularity**: 256×256 pixels at 0.6m resolution = ~154m × ~154m area
+
+For applications requiring precise lat/lon coordinates (e.g., mapping data center locations on a map), this chip-level approach was inadequate.
+
+
+## Forcing a solution with U-Net
 
 This project went through several iterations before settling on the current U-Net architecture. Understanding this evolution helps explain design decisions and avoid repeating failed approaches.
 
-### Why Classification Wasn't Sufficient
+The final approach switched to **U-Net trained from scratch** with just 2.5M trainable parameters. You might get better results with other image libraries; I just wanted to verify that _something_ worked better than my failed Clay attempts.
 
-The initial approach used a chip-level classifier that predicted whether a 256×256 pixel image chip contained a datacenter. While this worked for binary classification, it had critical limitations:
+## U-Net Model Performance
 
-- **No precise localization**: Could only say "datacenter exists in this 256×256 area" but not where exactly
-- **Poor centroid accuracy**: Center of the chip is not the same as center of the datacenter
-- **No polygon extraction**: Couldn't determine datacenter boundaries or actual footprint
-- **Coarse granularity**: 256×256 pixels at 0.6m resolution = ~154m × ~154m area
+Trained on 757 NAIP chips (256×256 pixels, 0.6m resolution):
 
-For applications requiring precise lat/lon coordinates (e.g., mapping datacenter locations on a map), this chip-level approach was inadequate.
+| Metric     | Score  |
+|------------|--------|
+| Dice Score | 76.3%  |
+| IoU        | 61.7%  |
+| Precision  | 75.9%  |
+| Recall     | 76.7%  |
 
-### Failed Segmentation Attempts with Clay Foundation Model
+**Model Architecture:**
+- U-Net with 4 encoder/decoder levels
+- 32 base channels
+- ~2.5M trainable parameters
+- Input: 4-band RGBN imagery
+- Output: Binary segmentation (datacenter/background)
 
-The next approach attempted to use the Clay Foundation Model, a 311M parameter pre-trained model for Earth observation. The idea was to leverage transfer learning by fine-tuning only the decoder head while keeping the encoder frozen.
-
-**Multiple training runs all failed:**
-
-1. **CrossEntropyLoss with class weights 1.0:5.0** (15 epochs)
-   - IoU: ~7-15%
-   - Model barely learned anything
-
-2. **CrossEntropyLoss with class weights 1.0:3.0** (15 epochs)
-   - IoU: ~10-20%
-   - Slight improvement but still poor
-
-3. **CrossEntropyLoss with balanced class weights 1.0:1.0** (15 epochs)
-   - IoU: ~25-37%
-   - Better but still far from usable
-   - Training data was ~48% datacenter pixels, so balanced weights made sense
-
-4. **Focal Loss** (specialized loss for class imbalance)
-   - Recall: 0.5%
-   - Model predicted almost nothing as datacenter
-   - Worse than CrossEntropyLoss
-
-**Root cause**: The frozen Clay encoder (311M parameters) was pre-trained on generic Earth observation tasks and couldn't adapt to datacenter-specific features. The small decoder head alone (~2M parameters) couldn't compensate.
-
-### Why Not Unfreeze the Encoder?
-
-The [Clay segmentation documentation](https://github.com/Clay-foundation/model/blob/main/docs/finetune/segment.md) explicitly uses a frozen encoder approach for their official segmentation fine-tuning workflow. Their tutorial trains on Chesapeake Bay land cover classification (forests, water, urban areas, etc.) with the encoder frozen, using only a lightweight segmentation head.
-
-**Why frozen encoder works for Clay's LULC task:**
-- Land cover classification (forests, water, buildings) is very similar to Clay's pre-training objectives
-- The encoder already learned these general Earth observation features during pre-training
-- Only the segmentation head needs to learn class boundaries
-- Uses very low learning rate (1e-5) appropriate for frozen encoder fine-tuning
-
-**Why frozen encoder failed for datacenter detection:**
-- Datacenters are highly specialized structures with specific architectural features:
-  - Rectangular industrial buildings with distinctive rooftops
-  - Cooling infrastructure patterns
-  - Electrical substation arrangements
-  - Different from natural land cover features
-- Clay's pre-training focused on general Earth observation (agriculture, forests, water bodies, etc.)
-- The frozen encoder couldn't extract datacenter-specific features
-- Small decoder head alone couldn't compensate for missing feature representations
-
-**Why we didn't unfreeze:**
-- Risk of catastrophic forgetting of pre-trained features
-- Requires massive amounts of training data to retrain 311M parameters
-- Very slow training on available hardware (CPU/MPS)
-- High risk of overfitting with only 757 training chips
-- Even if it worked, would negate the benefit of using a pre-trained model
-
-### U-Net Solution
-
-The final approach switched to **U-Net trained from scratch** with just 2.5M trainable parameters:
-
-**Why it worked:**
-- All parameters trainable and optimized for datacenter detection
+**Why it (finally) worked:**
+- All parameters trainable and optimized for data center detection
 - Simpler architecture better suited to specialized task
 - Faster training (minutes instead of hours)
 - No dependency on pre-trained weights that may not transfer well
@@ -94,9 +77,9 @@ The final approach switched to **U-Net trained from scratch** with just 2.5M tra
 - **Dice Score: 76.3%** (F1-score for segmentation)
 - **IoU: 61.7%** (Intersection over Union)
 - **Precision: 75.9%** (few false positives)
-- **Recall: 76.7%** (finds most datacenters)
+- **Recall: 76.7%** (finds most data centers)
 
-This represents a **2-3× improvement** over the best Clay model results (37% IoU → 62% IoU) while being faster to train and easier to maintain.
+>  This represents a **2-3× improvement** over the best Clay model results (37% IoU → 62% IoU) while being faster to train and easier to maintain.
 
 ### Key Takeaway
 
@@ -108,9 +91,10 @@ For specialized detection tasks with limited training data:
 ## Project Structure
 
 ```
-datacenter-detector/
+clay-ai-hyperscale/
 ├── src/
 │   └── datacenter_detector/
+│       ├── __init__.py
 │       ├── models/
 │       │   ├── __init__.py
 │       │   └── unet.py              # U-Net model architecture
@@ -127,13 +111,17 @@ datacenter-detector/
 │   ├── download_naip.py              # Download NAIP imagery
 │   └── create_masks.py               # Generate training masks from GeoJSON
 ├── checkpoints/
-│   ├── unet_last.ckpt                # Latest checkpoint
-│   └── unet_best.ckpt                # Best validation checkpoint
+│   └── unet_last.ckpt                # Latest checkpoint
 ├── data/
 │   ├── chips/                        # Training image chips (256x256)
-│   └── masks/                        # Training segmentation masks
-├── docs/                             # Documentation
+│   ├── masks/                        # Training segmentation masks
+│   ├── validation/                   # Validation visualizations
+│   └── datacenters.geojson           # Label polygons
 ├── tests/                            # Unit tests
+├── predictions/                      # Inference outputs
+├── results/                          # Result outputs
+├── test_images/                      # Test imagery
+├── outputs/                          # Training outputs
 ├── pyproject.toml                    # Project dependencies
 └── README.md                         # This file
 ```
@@ -261,23 +249,6 @@ uv run python bin/download_naip.py \
     --output large_area.tif
 ```
 
-## Model Performance
-
-Trained on 757 NAIP chips (256×256 pixels, 0.6m resolution):
-
-| Metric     | Score  |
-|------------|--------|
-| Dice Score | 76.3%  |
-| IoU        | 61.7%  |
-| Precision  | 75.9%  |
-| Recall     | 76.7%  |
-
-**Model Architecture:**
-- U-Net with 4 encoder/decoder levels
-- 32 base channels
-- ~2.5M trainable parameters
-- Input: 4-band RGBN imagery
-- Output: Binary segmentation (datacenter/background)
 
 ## Inference Features
 
@@ -305,70 +276,66 @@ Trained on 757 NAIP chips (256×256 pixels, 0.6m resolution):
 4. **Edge effects**: Small detections near image edges may be false positives
 5. **US-only**: NAIP imagery only covers the United States
 
-## Troubleshooting
 
-### CUDA/MPS Issues
-If you get CUDA warnings on Mac:
-- The code automatically uses MPS (Apple Silicon GPU)
-- No action needed, warnings are harmless
 
-### Out of Memory
-Reduce batch size or tile size:
-```bash
---batch-size 8  # Reduce from default 16
---tile-size 128  # Reduce from default 256
-```
-
-### Poor Detection Results
-Try adjusting parameters:
-```bash
---merge-distance 20      # Increase to merge more aggressively
---min-area 50            # Decrease to detect smaller buildings
-```
-
-### NAIP Download Fails
-- Check coordinates are within US bounds
-- Verify internet connection
-- API may timeout - retry after a few minutes
-
-## Development
-
-### Run Tests
-```bash
-pytest tests/
-```
-
-### Code Formatting
-```bash
-black src/ bin/
-ruff check src/ bin/
-```
-
-### Adding New Features
-1. Create new module in `src/datacenter_detector/`
-2. Add tests in `tests/`
-3. Update this README
-4. Submit pull request
-
-## Citation
-
-If you use this code in your research, please cite:
-
-```bibtex
-@software{datacenter_detector,
-  title = {Datacenter Detector: Semantic Segmentation for Aerial Imagery},
-  author = {Your Name},
-  year = {2024},
-  url = {https://github.com/yourusername/datacenter-detector}
-}
-```
-
-## License
-
-[Add your license here]
 
 ## Acknowledgments
 
 - Training data: NAIP imagery via Microsoft Planetary Computer
 - Architecture: U-Net (Ronneberger et al., 2015)
 - Framework: PyTorch Lightning
+
+
+---
+### Gory Details: Failed Segmentation Attempts with Clay Foundation Model
+
+The next approach attempted to use the Clay Foundation Model, a 311M parameter pre-trained model for Earth observation. The idea was to leverage transfer learning by fine-tuning only the decoder head while keeping the encoder frozen.
+
+**Multiple training runs all failed:**
+
+1. **CrossEntropyLoss with class weights 1.0:5.0** (15 epochs)
+   - IoU: ~7-15%
+   - Model barely learned anything
+
+2. **CrossEntropyLoss with class weights 1.0:3.0** (15 epochs)
+   - IoU: ~10-20%
+   - Slight improvement but still poor
+
+3. **CrossEntropyLoss with balanced class weights 1.0:1.0** (15 epochs)
+   - IoU: ~25-37%
+   - Better but still far from usable
+   - Training data was ~48% data center pixels, so balanced weights made sense
+
+4. **Focal Loss** (specialized loss for class imbalance)
+   - Recall: 0.5%
+   - Model predicted almost nothing as data center
+   - Worse than CrossEntropyLoss
+
+**Root cause**: The frozen Clay encoder (311M parameters) was pre-trained on generic Earth observation tasks and couldn't adapt to data center-specific features. The small decoder head alone (~2M parameters) couldn't compensate.
+
+### Why Not Unfreeze the Encoder?
+
+The [Clay segmentation documentation](https://github.com/Clay-foundation/model/blob/main/docs/finetune/segment.md) explicitly uses a frozen encoder approach for their official segmentation fine-tuning workflow. Their tutorial trains on Chesapeake Bay land cover classification (forests, water, urban areas, etc.) with the encoder frozen, using only a lightweight segmentation head.
+
+**Why frozen encoder works for Clay's LULC task:**
+- Land cover classification (forests, water, buildings) is very similar to Clay's pre-training objectives
+- The encoder already learned these general Earth observation features during pre-training
+- Only the segmentation head needs to learn class boundaries
+- Uses very low learning rate (1e-5) appropriate for frozen encoder fine-tuning
+
+**Why frozen encoder failed for data center detection:**
+- Data centers are highly specialized structures with specific architectural features:
+  - Rectangular industrial buildings with distinctive rooftops
+  - Cooling infrastructure patterns
+  - Electrical substation arrangements
+  - Different from natural land cover features
+- Clay's pre-training focused on general Earth observation (agriculture, forests, water bodies, etc.)
+- The frozen encoder couldn't extract data center-specific features
+- Small decoder head alone couldn't compensate for missing feature representations
+
+**Why we didn't unfreeze:**
+- Risk of catastrophic forgetting of pre-trained features
+- Requires massive amounts of training data to retrain 311M parameters
+- Very slow training on available hardware (CPU/MPS)
+- High risk of overfitting with only 757 training chips
+- Even if it worked, would negate the benefit of using a pre-trained model
