@@ -50,6 +50,8 @@ This project went through several iterations before settling on the current U-Ne
 
 The final approach switched to **U-Net trained from scratch** with just 2.5M trainable parameters. You might get better results with other image libraries; I just wanted to verify that _something_ worked better than my failed Clay attempts.
 
+![validation](data/validation/33_777000_-84_420000_113_validation.png)
+
 ## U-Net Model Performance
 
 Trained on 757 NAIP chips (256×256 pixels, 0.6m resolution):
