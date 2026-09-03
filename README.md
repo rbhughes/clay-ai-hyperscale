@@ -5,6 +5,16 @@ A semantic segmentation model for detecting data centers in aerial imagery using
 ![polys](./polys.png)
 ![clay](./clay.png)
 
+## 📦 Public assets
+
+The hand-digitized training bundle is published in
+[**Releases → assets-v1**](https://github.com/rbhughes/clay-ai-hyperscale/releases/tag/assets-v1):
+190 labeled data-center footprint polygons, 757 NAIP RGBN chips
+(256×256 @ 0.6 m), segmentation masks, validation previews, and the
+trained U-Net weights. NAIP is USDA public domain; labels, masks and
+weights are CC BY 4.0 — cite this repo. The label polygons are also
+committed in-repo at `data/datacenters.geojson`.
+
 ## Summary (a salvage operation)
 
 Clay AI is made for "earth observation" and, their [website](https://madewithclay.org/) shows a few examples with man-made structures (livestock), so I wondered if I could train it to detect hyperscale data centers.
