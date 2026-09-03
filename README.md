@@ -7,7 +7,10 @@ A semantic segmentation model for detecting data centers in aerial imagery using
 
 ## 📦 Public assets
 
-The hand-digitized training bundle is published in
+The hand-digitized training bundle is published in two places:
+browsable on **Hugging Face** at
+[rbhughes/hyperscale-datacenter-segmentation-naip](https://huggingface.co/datasets/rbhughes/hyperscale-datacenter-segmentation-naip),
+and as tarballs in
 [**Releases → assets-v1**](https://github.com/rbhughes/clay-ai-hyperscale/releases/tag/assets-v1):
 190 labeled data-center footprint polygons, 757 NAIP RGBN chips
 (256×256 @ 0.6 m), segmentation masks, validation previews, and the
