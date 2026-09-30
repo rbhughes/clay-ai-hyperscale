@@ -21,10 +21,6 @@ dependencies = [
     "tensorboard>=2.20.0",
 ]
 
-[project.scripts]
-datacenter-train = "datacenter_detector.cli:train"
-datacenter-detect = "datacenter_detector.cli:detect"
-
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
