@@ -3,6 +3,8 @@ name = "datacenter-detector"
 version = "0.1.0"
 description = "Datacenter detection from aerial imagery using U-Net semantic segmentation"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "torch>=2.0.0",
